@@ -9,6 +9,8 @@
 
 Use it when you want OpenCode to run Codex-style coding workflows from your own ChatGPT subscription while keeping accounts visible, switchable, health-checked, and recoverable from the terminal.
 
+**OpenCode V2 is supported (2.0.16+).** The V2 adapter uses the existing OAuth account pool and Codex routing pipeline; the V1 entrypoint remains available for OpenCode 1.18.29+. See [OpenCode V2 installation](#opencode-v2) for setup and login instructions.
+
 <img width="1227" height="702" alt="oc-codex-multi-auth OpenCode plugin dashboard for ChatGPT OAuth, Codex routing, and multi-account health" src="https://github.com/user-attachments/assets/b796eb2f-282e-468a-ba6a-acadf09d731b" />
 
 
