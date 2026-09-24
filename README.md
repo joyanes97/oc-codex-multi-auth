@@ -94,7 +94,10 @@ For a working checkout, use its absolute directory path in `plugins`, then run
 loads the package's quota UI through its `./tui` export.
 
 The installer also accepts `--v2` to register the plugin without rewriting the
-model catalog. Restart the background service after installing or rebuilding:
+model catalog. It refuses to modify an existing `opencode.jsonc` or convert a
+config with V1 `plugin` entries: edit the JSONC `plugins` list directly, or keep
+separate V1 and V2 configurations so the V1 registration is not lost. Restart
+the background service after installing or rebuilding:
 
 ```bash
 opencode service restart

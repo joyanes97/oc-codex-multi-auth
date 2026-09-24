@@ -12,6 +12,7 @@ import { CodexStatusRpc } from "./opencode-v2-rpc.js";
 import { createStorageScope } from "./storage/state.js";
 import { AUTH_LABELS } from "./constants.js";
 import { openBrowserUrl } from "./auth/browser.js";
+import { extractAccountId, extractAccountUserId } from "./auth/token-utils.js";
 
 const providerModule = new URL("./opencode-v2-provider.js", import.meta.url);
 // Local checkouts are loaded from TypeScript; published packages contain JS.
@@ -108,7 +109,20 @@ async function setupScopedV2(context: Plugin.Context, run: ReturnType<typeof cre
 							: { url: flow.url, instructions, mode: "auto" as const, callback: credential() };
 					}),
 					refresh: (credential) => run(async () => {
-						const result = await coordinatePersistedRefresh({ refreshToken: credential.refresh });
+						const pool = await loadAccounts();
+						const exact = pool?.accounts.find((account) => account.refreshToken === credential.refresh);
+						const accountId = extractAccountId(credential.access);
+						const accountUserId = extractAccountUserId(credential.access);
+						const matches = pool?.accounts.filter((account) =>
+							(accountId || accountUserId) &&
+							(!accountId || account.accountId === accountId) &&
+							(!accountUserId || account.accountUserId === accountUserId),
+						) ?? [];
+						const account = exact ?? (matches.length === 1 ? matches[0] : undefined);
+						const result = await coordinatePersistedRefresh({
+							refreshToken: credential.refresh,
+							...(account ? { organizationId: account.organizationId, accountId: account.accountId, accountUserId: account.accountUserId } : {}),
+						});
 						if (result.type !== "success") throw new Error("Codex token refresh failed");
 						return { ...credential, access: result.access, refresh: result.refresh, expires: result.expires };
 					}),

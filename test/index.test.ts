@@ -711,6 +711,12 @@ describe("OpenAIOAuthPlugin", () => {
 	});
 
 	describe("plugin structure", () => {
+		it("keeps the V1 server entrypoint alongside the V2 setup method", async () => {
+			const { default: entrypoint, OpenAIOAuthPlugin } = await import("../index.js");
+			expect(entrypoint.server).toBe(OpenAIOAuthPlugin);
+			expect(typeof entrypoint.setup).toBe("function");
+		});
+
 		it("exports event handler", () => {
 			expect(plugin.event).toBeDefined();
 			expect(typeof plugin.event).toBe("function");

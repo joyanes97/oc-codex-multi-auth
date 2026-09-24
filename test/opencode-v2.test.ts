@@ -166,6 +166,25 @@ describe("V2 compatibility adapter", () => {
 		await cleanup();
 	});
 
+	it("pins host refresh to the original seat after the pool rotates its token", async () => {
+		const h = host();
+		const cleanup = await setupV2(h.context);
+		const access = `header.${Buffer.from(JSON.stringify({
+			"https://api.openai.com/auth": { chatgpt_account_id: "workspace", chatgpt_account_user_id: "member-b" },
+		})).toString("base64url")}.signature`;
+		mocks.loadAccounts.mockResolvedValue({ activeIndex: 0, accounts: [
+			{ organizationId: "org", accountId: "workspace", accountUserId: "member-a", refreshToken: "rotated-a" },
+			{ organizationId: "org", accountId: "workspace", accountUserId: "member-b", refreshToken: "rotated-b" },
+		] });
+		mocks.refresh.mockResolvedValue({ type: "success", access: "updated", refresh: "rotated-b", expires: 456 });
+		const refreshed = await h.methods[0]!.refresh({ type: "oauth", methodID: "codex-multi-0", access, refresh: "old-b", expires: 0 });
+		expect(mocks.refresh).toHaveBeenCalledWith({
+			refreshToken: "old-b", organizationId: "org", accountId: "workspace", accountUserId: "member-b",
+		});
+		expect(refreshed).toMatchObject({ access: "updated", refresh: "rotated-b" });
+		await cleanup();
+	});
+
 	it("retains tool validation and defaults across JSON Schema registration", async () => {
 		const h = host();
 		const cleanup = await setupV2(h.context);

@@ -1,5 +1,7 @@
 import { expect, it, vi } from "vitest";
 
+const mocks = vi.hoisted(() => ({ overview: vi.fn(), promptStatus: vi.fn() }));
+
 vi.mock("../lib/config.js", async (original) => ({
 	...await original<typeof import("../lib/config.js")>(),
 	loadPluginConfig: () => ({ codexTuiMaskEmail: true }),
@@ -18,17 +20,34 @@ vi.mock("../lib/tui-quota-cache.js", () => ({
 	TUI_QUOTA_OVERVIEW_CACHE_FILE: "overview.json",
 }));
 vi.mock("../lib/tui-quota-overview.js", () => ({
-	fetchTuiQuotaOverview: async () => null,
+	fetchTuiQuotaOverview: mocks.overview,
 	toQuotaOverviewAccounts: () => [],
+}));
+vi.mock("../lib/tui-status.js", async (original) => ({
+	...await original<typeof import("../lib/tui-status.js")>(),
+	formatPromptStatusText: (options: unknown) => { mocks.promptStatus(options); return "quota"; },
 }));
 import { readV2Status } from "../lib/opencode-v2-status.js";
 import { resolveDisplayEmail } from "../lib/account-display.js";
+import { createUsageAccountFingerprint } from "../lib/codex-usage.js";
 
 it("lists every account with masked identities even when quota is unavailable", async () => {
+	mocks.overview.mockResolvedValue(null);
 	const result = await readV2Status({ width: 80 });
 	expect(result.accounts).toEqual([
 		{ index: 1, label: resolveDisplayEmail("first@example.com", true), active: false, enabled: false },
 		{ index: 2, label: "Work", active: true, enabled: true },
 	]);
 	expect(JSON.stringify(result)).not.toMatch(/private-refresh|private-access|another-refresh|first@example.com|second@example.com/);
+});
+
+it("uses a one-based account index in the V2 quota status", async () => {
+	mocks.overview.mockResolvedValue({
+		fetchedAt: Date.now(),
+		accounts: [{ fingerprint: createUsageAccountFingerprint({ refreshToken: "another-refresh" }), limits: [] }],
+	});
+	await readV2Status({ width: 80 });
+	expect(mocks.promptStatus).toHaveBeenLastCalledWith(expect.objectContaining({
+		quota: expect.objectContaining({ accountIndex: 2, accountCount: 2 }),
+	}));
 });

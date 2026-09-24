@@ -157,6 +157,7 @@ function buildPaths(homeDir) {
 	return {
 		configDir,
 		configPath: join(configDir, "opencode.json"),
+		jsoncConfigPath: join(configDir, "opencode.jsonc"),
 		tuiConfigPath: join(configDir, "tui.json"),
 		cacheDir,
 		cacheNodeModulesPaths: getManagedPackageNames().map((name) => join(cacheDir, "node_modules", name)),
@@ -1813,15 +1814,17 @@ export async function runInstaller(argv = process.argv.slice(2), options = {}) {
 
 	const { configMode, dryRun, skipCacheClear, pluginOnly } = parsed;
 	if (parsed.v2) {
+		if (existsSync(paths.jsoncConfigPath)) {
+			throw new Error(`OpenCode config exists at ${paths.jsoncConfigPath}; edit its plugins list directly instead of writing a second config file.`);
+		}
 		const existing = existsSync(paths.configPath) ? await readJson(paths.configPath) : {};
 		if (!isPlainObject(existing)) throw new Error("OpenCode config root must be an object");
-		const entries = [...(Array.isArray(existing.plugin) ? existing.plugin : []),
-			...(Array.isArray(existing.plugins) ? existing.plugins : [])]
-			.map((entry) => Array.isArray(entry) ? { package: entry[0], options: entry[1] ?? {} } : entry);
-		const next = { ...existing, plugins: normalizePluginList(entries, log, {
+		if (Array.isArray(existing.plugin) && existing.plugin.length > 0) {
+			throw new Error("OpenCode V1 plugin entries are present. Use a separate V2 config or migrate them manually; --v2 will not remove your V1 registration.");
+		}
+		const next = { ...existing, plugins: normalizePluginList(existing.plugins, log, {
 			baseDirectory: paths.configDir, cacheDirectory: paths.cacheDir,
 		}) };
-		delete next.plugin;
 		next.$schema ??= "https://opencode.ai/config.json";
 		if (dryRun) log(`[dry-run] Would register V2 plugin in ${paths.configPath}`);
 		else if (formatJson(existing) !== formatJson(next)) {

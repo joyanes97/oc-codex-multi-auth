@@ -27,7 +27,7 @@ export async function readV2Status({ width }: { width: number }) {
 	const usage = active && overview?.accounts.find((account) => account.fingerprint === createUsageAccountFingerprint(active));
 	if (usage && overview) {
 		quota = { type: "ready", limits: usage.limits, stale: !isFreshTuiQuotaSnapshot(overview),
-			source: "usage", fetchedAt: overview.fetchedAt, accountIndex: pool?.activeIndex,
+			source: "usage", fetchedAt: overview.fetchedAt, accountIndex: pool ? pool.activeIndex + 1 : undefined,
 			accountCount: pool?.accounts.length, accountEmail: active.email, accountLabel: active.accountLabel,
 			planType: usage.planType };
 	}
