@@ -185,6 +185,28 @@ describe("V2 compatibility adapter", () => {
 		await cleanup();
 	});
 
+	it("chooses the access-token seat when several accounts share a refresh token", async () => {
+		const h = host();
+		const cleanup = await setupV2(h.context);
+		const access = `header.${Buffer.from(JSON.stringify({
+			"https://api.openai.com/auth": { chatgpt_account_id: "workspace", chatgpt_account_user_id: "member-b" },
+		})).toString("base64url")}.signature`;
+		mocks.loadAccounts.mockResolvedValue({ activeIndex: 0, accounts: [
+			{ organizationId: "org", accountId: "workspace", accountUserId: "member-a", refreshToken: "shared" },
+			{ organizationId: "org", accountId: "workspace", accountUserId: "member-b", refreshToken: "shared" },
+		] });
+		mocks.refresh.mockResolvedValue({ type: "success", access: "updated", refresh: "rotated", expires: 456 });
+		const credential = { type: "oauth" as const, methodID: "codex-multi-0", access, refresh: "shared", expires: 0 };
+		await h.methods[0]!.refresh(credential);
+		expect(mocks.refresh).toHaveBeenCalledWith({
+			refreshToken: "shared", organizationId: "org", accountId: "workspace", accountUserId: "member-b",
+		});
+		mocks.refresh.mockClear();
+		await expect(h.methods[0]!.refresh({ ...credential, access: "unidentifiable" })).rejects.toThrow("ambiguous");
+		expect(mocks.refresh).not.toHaveBeenCalled();
+		await cleanup();
+	});
+
 	it("retains tool validation and defaults across JSON Schema registration", async () => {
 		const h = host();
 		const cleanup = await setupV2(h.context);

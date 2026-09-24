@@ -110,7 +110,7 @@ async function setupScopedV2(context: Plugin.Context, run: ReturnType<typeof cre
 					}),
 					refresh: (credential) => run(async () => {
 						const pool = await loadAccounts();
-						const exact = pool?.accounts.find((account) => account.refreshToken === credential.refresh);
+						const exactMatches = pool?.accounts.filter((account) => account.refreshToken === credential.refresh) ?? [];
 						const accountId = extractAccountId(credential.access);
 						const accountUserId = extractAccountUserId(credential.access);
 						const matches = pool?.accounts.filter((account) =>
@@ -118,7 +118,10 @@ async function setupScopedV2(context: Plugin.Context, run: ReturnType<typeof cre
 							(!accountId || account.accountId === accountId) &&
 							(!accountUserId || account.accountUserId === accountUserId),
 						) ?? [];
-						const account = exact ?? (matches.length === 1 ? matches[0] : undefined);
+						// One OAuth grant can back several seats. The access-token seat wins
+						// over a shared refresh token; never guess if both are ambiguous.
+						const account = matches.length === 1 ? matches[0] : exactMatches.length === 1 ? exactMatches[0] : undefined;
+						if (!account && exactMatches.length > 1) throw new Error("Codex refresh account is ambiguous; reconnect the account");
 						const result = await coordinatePersistedRefresh({
 							refreshToken: credential.refresh,
 							...(account ? { organizationId: account.organizationId, accountId: account.accountId, accountUserId: account.accountUserId } : {}),
