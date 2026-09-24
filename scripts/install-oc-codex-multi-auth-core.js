@@ -113,6 +113,7 @@ function printHelp() {
 		"  - Clears OpenCode plugin cache\n\n" +
 		"Options:\n" +
 		"  --plugin-only      Register plugins without changing provider.openai\n" +
+		"  --v2               Register for OpenCode V2 (includes automatic quota UI loading)\n" +
 		"  --modern           Force compact modern config (10 base OAuth models + --variant presets)\n" +
 		"  --full             Install compact base models plus 53 explicit selector entries\n" +
 		"  --legacy           Force explicit legacy config (53 preset model entries)\n" +
@@ -193,12 +194,16 @@ function parseCliArgs(argv = process.argv.slice(2)) {
 		throw new Error("--plugin-only cannot be combined with --modern, --full, or --legacy.");
 	}
 	const pluginOnly = explicitPluginOnly || requestedModes === 0;
+	if (args.has("--v2") && !pluginOnly) {
+		throw new Error("--v2 registers the plugin only; omit --modern, --full, and --legacy.");
+	}
 
 	return {
 		wantsHelp: false,
 		dryRun: args.has("--dry-run"),
 		skipCacheClear: args.has("--no-cache-clear"),
 		pluginOnly,
+		v2: args.has("--v2"),
 		configMode: requestedFull ? "full" : requestedLegacy ? "legacy" : "modern",
 	};
 }
@@ -223,6 +228,7 @@ const DECLARED_NAME_LOOKUP_DEPTH = 3;
 
 function pluginEntrySpecifier(entry) {
 	if (typeof entry === "string") return entry;
+	if (isPlainObject(entry) && typeof entry.package === "string") return entry.package;
 	// `[specifier, options]` configures a plugin without changing where it loads from.
 	if (Array.isArray(entry) && typeof entry[0] === "string") return entry[0];
 	return null;
@@ -1806,6 +1812,25 @@ export async function runInstaller(argv = process.argv.slice(2), options = {}) {
 	}
 
 	const { configMode, dryRun, skipCacheClear, pluginOnly } = parsed;
+	if (parsed.v2) {
+		const existing = existsSync(paths.configPath) ? await readJson(paths.configPath) : {};
+		if (!isPlainObject(existing)) throw new Error("OpenCode config root must be an object");
+		const entries = [...(Array.isArray(existing.plugin) ? existing.plugin : []),
+			...(Array.isArray(existing.plugins) ? existing.plugins : [])]
+			.map((entry) => Array.isArray(entry) ? { package: entry[0], options: entry[1] ?? {} } : entry);
+		const next = { ...existing, plugins: normalizePluginList(entries, log, {
+			baseDirectory: paths.configDir, cacheDirectory: paths.cacheDir,
+		}) };
+		delete next.plugin;
+		next.$schema ??= "https://opencode.ai/config.json";
+		if (dryRun) log(`[dry-run] Would register V2 plugin in ${paths.configPath}`);
+		else if (formatJson(existing) !== formatJson(next)) {
+			if (existsSync(paths.configPath)) await backupConfig(paths.configPath, false);
+			await writeFileAtomic(paths.configPath, formatJson(next));
+		}
+		log(dryRun ? "V2 registration dry run complete." : "V2 plugin registered. Restart the OpenCode service to load it.");
+		return { exitCode: 0, action: "install", dryRun: Boolean(dryRun), configMode: "v2" };
+	}
 	const effectiveConfigMode = pluginOnly ? "plugin-only" : configMode;
 	const requiredTemplatePaths = pluginOnly
 		? []

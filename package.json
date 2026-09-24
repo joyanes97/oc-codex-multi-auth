@@ -119,10 +119,12 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.117",
     "@napi-rs/keyring": "~1.2.0",
     "@opencode-ai/plugin": "^1.14.22",
-    "@opentui/core": "0.2.6",
-    "@opentui/solid": "0.2.6",
+    "@opencode/plugin": "^2.0.16",
+    "@opentui/core": "^0.5.12",
+    "@opentui/solid": "^0.5.12",
     "proper-lockfile": "^4.1.2",
     "solid-js": "^1.9.11",
     "web-tree-sitter": "^0.25.10",

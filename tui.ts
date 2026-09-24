@@ -1078,4 +1078,10 @@ const module: TuiPluginModule = {
 	},
 };
 
-export default module;
+export default {
+	...module,
+	async setup(context: import("@opencode/plugin/tui").Plugin.Context) {
+		const { setupV2Tui } = await import("./lib/opencode-v2-tui.js");
+		return setupV2Tui(context);
+	},
+};

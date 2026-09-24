@@ -18,6 +18,7 @@
  */
 
 import { join } from "node:path";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { ACCOUNTS_FILE_NAME, LEGACY_ACCOUNTS_FILE_NAME } from "../constants.js";
 import {
   findProjectRoot,
@@ -42,46 +43,62 @@ export function withStorageLock<T>(fn: () => Promise<T>): Promise<T> {
   return previousMutex.then(fn).finally(() => releaseLock());
 }
 
-let currentStoragePath: string | null = null;
-let currentLegacyProjectStoragePath: string | null = null;
-let currentProjectRoot: string | null = null;
-const storagePathListeners = new Set<() => void>();
+function newStorageState() {
+  return {
+    currentStoragePath: null as string | null,
+    currentLegacyProjectStoragePath: null as string | null,
+    currentProjectRoot: null as string | null,
+    storagePathListeners: new Set<() => void>(),
+  };
+}
+const defaultState = newStorageState();
+const storageScope = new AsyncLocalStorage<ReturnType<typeof newStorageState>>();
+const state = () => storageScope.getStore() ?? defaultState;
+
+/** V2 hosts multiple locations in one process. Timers inherit their owner's scope. */
+export function createStorageScope() {
+  const scoped = newStorageState();
+  return <T>(operation: () => T): T => storageScope.run(scoped, operation);
+}
 
 export function subscribeToStoragePathChanges(listener: () => void): () => void {
+  const { storagePathListeners } = state();
   storagePathListeners.add(listener);
   return () => { storagePathListeners.delete(listener); };
 }
 
 function notifyStoragePathChanged(): void {
-  for (const listener of storagePathListeners) listener();
+  for (const listener of state().storagePathListeners) listener();
 }
 
 export function setStoragePath(projectPath: string | null): void {
+  const current = state();
   if (!projectPath) {
-    currentStoragePath = null;
-    currentLegacyProjectStoragePath = null;
-    currentProjectRoot = null;
+    current.currentStoragePath = null;
+    current.currentLegacyProjectStoragePath = null;
+    current.currentProjectRoot = null;
     notifyStoragePathChanged();
     return;
   }
 
   const projectRoot = findProjectRoot(projectPath);
   if (projectRoot) {
-    currentProjectRoot = projectRoot;
-    currentStoragePath = join(getProjectGlobalConfigDir(projectRoot), ACCOUNTS_FILE_NAME);
-    currentLegacyProjectStoragePath = join(getProjectConfigDir(projectRoot), LEGACY_ACCOUNTS_FILE_NAME);
+    current.currentProjectRoot = projectRoot;
+    current.currentStoragePath = join(getProjectGlobalConfigDir(projectRoot), ACCOUNTS_FILE_NAME);
+    current.currentLegacyProjectStoragePath = join(getProjectConfigDir(projectRoot), LEGACY_ACCOUNTS_FILE_NAME);
   } else {
-    currentStoragePath = null;
-    currentLegacyProjectStoragePath = null;
-    currentProjectRoot = null;
+    current.currentStoragePath = null;
+    current.currentLegacyProjectStoragePath = null;
+    current.currentProjectRoot = null;
   }
   notifyStoragePathChanged();
 }
 
 export function setStoragePathDirect(path: string | null): void {
-  currentStoragePath = path;
-  currentLegacyProjectStoragePath = null;
-  currentProjectRoot = null;
+  const current = state();
+  current.currentStoragePath = path;
+  current.currentLegacyProjectStoragePath = null;
+  current.currentProjectRoot = null;
   notifyStoragePathChanged();
 }
 
@@ -90,6 +107,7 @@ export function setStoragePathDirect(path: string | null): void {
  * @returns Absolute path to the accounts.json file
  */
 export function getStoragePath(): string {
+  const { currentStoragePath } = state();
   if (currentStoragePath) {
     return currentStoragePath;
   }
@@ -101,15 +119,15 @@ export function getStoragePath(): string {
 // `setStoragePath` / `getStoragePath` APIs.
 
 export function getCurrentStoragePath(): string | null {
-  return currentStoragePath;
+  return state().currentStoragePath;
 }
 
 export function getCurrentLegacyProjectStoragePath(): string | null {
-  return currentLegacyProjectStoragePath;
+  return state().currentLegacyProjectStoragePath;
 }
 
 export function getCurrentProjectRoot(): string | null {
-  return currentProjectRoot;
+  return state().currentProjectRoot;
 }
 
 /**
@@ -124,6 +142,7 @@ export function getCurrentProjectRoot(): string | null {
  * `null` because there is no meaningful project identity to key off.
  */
 export function getCurrentProjectStorageKey(): string | null {
+  const { currentProjectRoot } = state();
   if (!currentProjectRoot) return null;
   return getProjectStorageKey(currentProjectRoot);
 }

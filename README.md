@@ -74,6 +74,54 @@ The plugin does not replace OpenCode. OpenCode remains the host; this package in
 
 ## Installation
 
+### OpenCode V2
+
+The V2 compatibility adapter targets OpenCode **2.0.16 or newer** and reuses the
+existing OAuth account pool, refresh, rotation, retry, and Codex request pipeline.
+Register the package in `opencode.json(c)`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": ["oc-codex-multi-auth"]
+}
+```
+
+For a working checkout, use its absolute directory path in `plugins`, then run
+`npm install` and `npm run build` in that checkout. The V2 terminal automatically
+loads the package's quota UI through its `./tui` export.
+
+The installer also accepts `--v2` to register the plugin without rewriting the
+model catalog. Restart the background service after installing or rebuilding:
+
+```bash
+opencode service restart
+```
+
+Run `opencode auth login` from your project directory and select **OpenAI** →
+**Codex OAuth (Add account — ChatGPT Plus/Pro)**. Repeat for each account, using
+a private browser window or switching browser accounts to select a different login.
+The built-in **ChatGPT Pro/Plus (browser)** method does not run the plugin's add-account flow.
+The plugin's **Device Code**, **Open URL Manually**, and **Manual URL Paste**
+methods are also available through login or `/connect`. Each adds to the pool;
+logging into the same account updates its existing entry. Pools are per-project
+by default, so log in from the directory where you use OpenCode. Existing
+plugin accounts remain usable; V2's own credentials are managed through its
+integration API. Use the plugin's `codex-list` and `codex-switch` tools to manage
+its pool. V2 normalizes tool names, so these appear as `codex_list`, `codex_switch`,
+and so on. The **Codex accounts** sidebar section lists the pool and marks its
+active account. Use `/codex-accounts` or **Codex accounts** in the command palette
+to view the list even when the sidebar is hidden. The quota details command is
+also available in the command palette.
+
+Existing supported V1 provider/model config can remain in place. The adapter
+uses HTTP Responses through the existing plugin transport. V1's interactive
+multi-account login menu and session-repair client calls are replaced by the
+V2 connection UI and host session handling. The V1 entrypoint remains available
+for OpenCode **1.18.29+**.
+
+### OpenCode V1
+
 <details open>
 <summary><b>For Humans</b></summary>
 
