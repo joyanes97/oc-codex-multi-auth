@@ -151,6 +151,7 @@ function resolveHomeDirectory(env = process.env) {
 	return env.HOME || env.USERPROFILE || homedir();
 }
 
+/** Resolve both JSON and JSONC config locations before changing V2 registration. */
 function buildPaths(homeDir) {
 	const configDir = join(homeDir, ".config", "opencode");
 	const cacheDir = join(homeDir, ".cache", "opencode");
@@ -173,6 +174,7 @@ function buildPaths(homeDir) {
 	};
 }
 
+/** Keep V2 plugin-only installation separate from V1 model catalog modes. */
 function parseCliArgs(argv = process.argv.slice(2)) {
 	const args = new Set(argv);
 	if (args.has("--help") || args.has("-h")) {
@@ -227,6 +229,7 @@ const LOCAL_CHECKOUT_ENTRY = "local-checkout";
 const UNRELATED_ENTRY = "unrelated";
 const DECLARED_NAME_LOOKUP_DEPTH = 3;
 
+/** Extract a package/path from V1 tuples or native V2 plugin objects. */
 function pluginEntrySpecifier(entry) {
 	if (typeof entry === "string") return entry;
 	if (isPlainObject(entry) && typeof entry.package === "string") return entry.package;
@@ -1781,6 +1784,7 @@ async function clearCache(paths, dryRun, skipCacheClear) {
 	await removePluginFromCachePackage(paths, dryRun);
 }
 
+/** Route V2 installs without rewriting V1 entries or parallel JSONC config. */
 export async function runInstaller(argv = process.argv.slice(2), options = {}) {
 	const split = splitCommandArgv(argv);
 	if (split.kind === "standalone") {

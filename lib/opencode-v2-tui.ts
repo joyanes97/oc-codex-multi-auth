@@ -3,6 +3,7 @@ import { createElement, spread } from "@opentui/solid";
 import { createSignal, onCleanup } from "solid-js";
 import { CodexStatusRpc } from "./opencode-v2-rpc.js";
 
+/** Register quota and account views; return a disposer for the V2 TUI slots. */
 export function setupV2Tui(context: Plugin.Context) {
 	const [text, setText] = createSignal("");
 	const [accounts, setAccounts] = createSignal("Loading accounts…");

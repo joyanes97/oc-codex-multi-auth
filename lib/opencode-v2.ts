@@ -57,6 +57,7 @@ export function setupV2(context: Plugin.Context) {
 	return run(() => setupScopedV2(context, run));
 }
 
+/** Register V2 hooks within the location's account-storage scope and release them on unload. */
 async function setupScopedV2(context: Plugin.Context, run: ReturnType<typeof createStorageScope>) {
 	const runtime = await createPluginRuntime({ directory: context.location.directory });
 	const auth = runtime.auth;

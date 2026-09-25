@@ -43,6 +43,7 @@ export function withStorageLock<T>(fn: () => Promise<T>): Promise<T> {
   return previousMutex.then(fn).finally(() => releaseLock());
 }
 
+/** Create an independent path/listener set for one V2 location or the V1 default. */
 function newStorageState() {
   return {
     currentStoragePath: null as string | null,
@@ -53,6 +54,7 @@ function newStorageState() {
 }
 const defaultState = newStorageState();
 const storageScope = new AsyncLocalStorage<ReturnType<typeof newStorageState>>();
+/** Read the active location's state, falling back to the original V1 singleton. */
 const state = () => storageScope.getStore() ?? defaultState;
 
 /** V2 hosts multiple locations in one process. Timers inherit their owner's scope. */
@@ -61,16 +63,19 @@ export function createStorageScope() {
   return <T>(operation: () => T): T => storageScope.run(scoped, operation);
 }
 
+/** Listen only for path changes in the current storage scope. */
 export function subscribeToStoragePathChanges(listener: () => void): () => void {
   const { storagePathListeners } = state();
   storagePathListeners.add(listener);
   return () => { storagePathListeners.delete(listener); };
 }
 
+/** Notify listeners belonging to the current location, not other V2 sessions. */
 function notifyStoragePathChanged(): void {
   for (const listener of state().storagePathListeners) listener();
 }
 
+/** Select project-scoped account files, or clear the selection for global storage. */
 export function setStoragePath(projectPath: string | null): void {
   const current = state();
   if (!projectPath) {
@@ -94,6 +99,7 @@ export function setStoragePath(projectPath: string | null): void {
   notifyStoragePathChanged();
 }
 
+/** Override the active file without assigning a project identity (e.g. CLI/tests). */
 export function setStoragePathDirect(path: string | null): void {
   const current = state();
   current.currentStoragePath = path;
@@ -118,14 +124,17 @@ export function getStoragePath(): string {
 // top-level barrel: callers outside `lib/storage/` should use the public
 // `setStoragePath` / `getStoragePath` APIs.
 
+/** Return the current location's explicit accounts path, if one is selected. */
 export function getCurrentStoragePath(): string | null {
   return state().currentStoragePath;
 }
 
+/** Return the legacy project file path used for seeding, if configured. */
 export function getCurrentLegacyProjectStoragePath(): string | null {
   return state().currentLegacyProjectStoragePath;
 }
 
+/** Return the resolved project root for the active storage location. */
 export function getCurrentProjectRoot(): string | null {
   return state().currentProjectRoot;
 }

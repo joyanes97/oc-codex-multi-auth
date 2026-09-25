@@ -1080,6 +1080,7 @@ const module: TuiPluginModule = {
 
 export default {
 	...module,
+	/** V2 loads terminal status through CLI slots rather than V1 prompt hooks. */
 	async setup(context: import("@opencode/plugin/tui").Plugin.Context) {
 		const { setupV2Tui } = await import("./lib/opencode-v2-tui.js");
 		return setupV2Tui(context);

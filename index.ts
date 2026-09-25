@@ -5174,6 +5174,7 @@ export const OpenAIAuthPlugin = OpenAIOAuthPlugin;
 export default {
 	id: "oc-codex-multi-auth",
 	server: OpenAIOAuthPlugin,
+	/** V2 loads the same package through setup instead of the V1 server hook. */
 	async setup(context: import("@opencode/plugin").Plugin.Context) {
 		const { setupV2 } = await import("./lib/opencode-v2.js");
 		return setupV2(context);
