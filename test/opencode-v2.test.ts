@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
 	runtime: vi.fn(), loadAccounts: vi.fn(), refresh: vi.fn(), openBrowser: vi.fn(), interactive: vi.fn(),
 }));
 vi.mock("../lib/auth/browser.js", () => ({ openBrowserUrl: mocks.openBrowser }));
-vi.mock("../index.js", () => ({ createPluginRuntime: mocks.runtime }));
 vi.mock("../lib/storage.js", () => ({ loadAccounts: mocks.loadAccounts }));
 vi.mock("../lib/storage/coordinated-refresh.js", () => ({ coordinatePersistedRefresh: mocks.refresh }));
 vi.mock("../lib/opencode-v2-status.js", () => ({ readV2Status: vi.fn() }));
@@ -71,7 +70,7 @@ describe("V2 compatibility adapter", () => {
 
 	it("uses a distinct provider package so V2 cannot rewrite the transport to native OpenAI", async () => {
 		const h = host();
-		const cleanup = await setupV2(h.context);
+		const cleanup = await setupV2(h.context, mocks.runtime);
 		expect(h.provider.package).toMatch(/^aisdk:file:.*opencode-v2-provider\.(ts|js)$/);
 		expect(h.model.package).toBe(h.provider.package);
 		const sdkEvent: AISDKHooks["sdk"] = { model: h.model, package: h.provider.package, options: {} };
@@ -87,7 +86,7 @@ describe("V2 compatibility adapter", () => {
 		mocks.loadAccounts.mockResolvedValue(null);
 		const h = host();
 		const original = h.provider.package;
-		const cleanup = await setupV2(h.context);
+		const cleanup = await setupV2(h.context, mocks.runtime);
 		expect(h.provider.package).toBe(original);
 		await h.hooks.get("sdk")?.({ model: h.model, package: original, options: {} });
 		expect(loader).not.toHaveBeenCalled();
@@ -96,7 +95,7 @@ describe("V2 compatibility adapter", () => {
 
 	it.each(["doGenerate", "doStream"] as const)("preserves multi-turn history before %s serialization", async (method) => {
 		const h = host();
-		const cleanup = await setupV2(h.context);
+		const cleanup = await setupV2(h.context, mocks.runtime);
 		const captured: Record<string, unknown>[] = [];
 		const stop = new Error("captured request");
 		const sdk = createOpenAI({
@@ -143,7 +142,7 @@ describe("V2 compatibility adapter", () => {
 
 	it("adapts automatic and pasted-code OAuth without invoking terminal-interactive setup", async () => {
 		const h = host();
-		const cleanup = await setupV2(h.context);
+		const cleanup = await setupV2(h.context, mocks.runtime);
 		expect(h.methods.map((method) => method.method.label)).toEqual([
 			"Codex OAuth (Add account — ChatGPT Plus/Pro)", "Codex OAuth (Open URL Manually)", "Manual",
 		]);
@@ -168,7 +167,7 @@ describe("V2 compatibility adapter", () => {
 
 	it("pins host refresh to the original seat after the pool rotates its token", async () => {
 		const h = host();
-		const cleanup = await setupV2(h.context);
+		const cleanup = await setupV2(h.context, mocks.runtime);
 		const access = `header.${Buffer.from(JSON.stringify({
 			"https://api.openai.com/auth": { chatgpt_account_id: "workspace", chatgpt_account_user_id: "member-b" },
 		})).toString("base64url")}.signature`;
@@ -187,7 +186,7 @@ describe("V2 compatibility adapter", () => {
 
 	it("chooses the access-token seat when several accounts share a refresh token", async () => {
 		const h = host();
-		const cleanup = await setupV2(h.context);
+		const cleanup = await setupV2(h.context, mocks.runtime);
 		const access = `header.${Buffer.from(JSON.stringify({
 			"https://api.openai.com/auth": { chatgpt_account_id: "workspace", chatgpt_account_user_id: "member-b" },
 		})).toString("base64url")}.signature`;
@@ -209,7 +208,7 @@ describe("V2 compatibility adapter", () => {
 
 	it("retains tool validation and defaults across JSON Schema registration", async () => {
 		const h = host();
-		const cleanup = await setupV2(h.context);
+		const cleanup = await setupV2(h.context, mocks.runtime);
 		const tool = h.tools[0]!;
 		expect(tool.input).toMatchObject({ type: "object" });
 		const call = { signal: new AbortController().signal, progress: vi.fn() } as unknown as Parameters<typeof tool.execute>[1];

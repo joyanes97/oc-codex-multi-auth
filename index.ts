@@ -394,8 +394,14 @@ function resolveOpenAIBaseURL(): string | undefined {
  
 export const OpenAIOAuthPlugin: Plugin = async ({ client }: PluginInput) => createPluginRuntime({ client });
 
-/** Shared request/account runtime; V2 has no V1 client or host auth.json. */
-export async function createPluginRuntime({ client, directory = process.cwd() }: {
+/**
+ * Shared request/account runtime; V2 has no V1 client or host auth.json.
+ *
+ * Not exported: V1 hosts call every function this module exports as a plugin,
+ * so an exported factory would boot a second runtime beside the real one. The
+ * V2 entry receives it through `setup` instead.
+ */
+async function createPluginRuntime({ client, directory = process.cwd() }: {
 	client?: PluginInput["client"];
 	directory?: string;
 }): Promise<Hooks> {
@@ -5177,6 +5183,6 @@ export default {
 	/** V2 loads the same package through setup instead of the V1 server hook. */
 	async setup(context: import("@opencode/plugin").Plugin.Context) {
 		const { setupV2 } = await import("./lib/opencode-v2.js");
-		return setupV2(context);
+		return setupV2(context, createPluginRuntime);
 	},
 };

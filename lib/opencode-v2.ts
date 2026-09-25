@@ -2,7 +2,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { existsSync } from "node:fs";
 import { Integration, type Credential, type Plugin } from "@opencode/plugin";
 import { z } from "zod";
-import { createPluginRuntime } from "../index.js";
+import type { Hooks } from "@opencode-ai/plugin";
 import { loadAccounts } from "./storage.js";
 import { coordinatePersistedRefresh } from "./storage/coordinated-refresh.js";
 import { logInfo, logWarn } from "./logger.js";
@@ -51,14 +51,21 @@ export function createV2Fetch(fetcher: (input: Request | string | URL, init?: Re
 	};
 }
 
+/** The shared V1 runtime factory, passed in by the package entry. */
+export type CreateV2Runtime = (options: { directory: string }) => Promise<Hooks>;
+
 /** Keep account rotation and wire transforms in the shared runtime. */
-export function setupV2(context: Plugin.Context) {
+export function setupV2(context: Plugin.Context, createPluginRuntime: CreateV2Runtime) {
 	const run = createStorageScope();
-	return run(() => setupScopedV2(context, run));
+	return run(() => setupScopedV2(context, run, createPluginRuntime));
 }
 
 /** Register V2 hooks within the location's account-storage scope and release them on unload. */
-async function setupScopedV2(context: Plugin.Context, run: ReturnType<typeof createStorageScope>) {
+async function setupScopedV2(
+	context: Plugin.Context,
+	run: ReturnType<typeof createStorageScope>,
+	createPluginRuntime: CreateV2Runtime,
+) {
 	const runtime = await createPluginRuntime({ directory: context.location.directory });
 	const auth = runtime.auth;
 	if (!auth?.loader) throw new Error("Codex authentication runtime is unavailable");
