@@ -9,7 +9,8 @@ import { resolveDisplayEmail } from "./account-display.js";
 
 /** Same cadence as the V1 prompt status poll. */
 const OVERVIEW_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
-const lastOverviewAttempt = new Map<string, number>();
+type PoolOverview = Awaited<ReturnType<typeof fetchTuiQuotaOverview>>;
+const lastOverviewAttempt = new Map<string, { at: number; snapshot: PoolOverview }>();
 
 /** Test hook: forget when each pool was last fetched. */
 export function resetV2StatusThrottle(): void {
@@ -20,16 +21,22 @@ export function resetV2StatusThrottle(): void {
  * The TUI asks for status every two seconds, and a pool snapshot can stay stale
  * indefinitely (a failing account keeps its older reading and fetch time). Gate
  * the network pass on the last attempt, not the last success, so a stale cache
- * reads the file instead of re-fetching every account on every poll.
+ * reads the file instead of re-fetching every account on every poll. The last
+ * fetched snapshot is kept in memory too: if writing it to the cache failed,
+ * the file is older and must not win.
  */
-async function loadPoolOverview(cachePath: string) {
+async function loadPoolOverview(cachePath: string): Promise<PoolOverview> {
 	const now = Date.now();
 	const last = lastOverviewAttempt.get(cachePath);
-	if (last !== undefined && now - last < OVERVIEW_REFRESH_INTERVAL_MS) {
-		return readTuiQuotaOverviewSnapshot(cachePath);
+	if (last !== undefined && now - last.at < OVERVIEW_REFRESH_INTERVAL_MS) {
+		const cached = await readTuiQuotaOverviewSnapshot(cachePath);
+		if (!last.snapshot) return cached;
+		return cached && cached.fetchedAt >= last.snapshot.fetchedAt ? cached : last.snapshot;
 	}
-	lastOverviewAttempt.set(cachePath, now);
-	return fetchTuiQuotaOverview({ cachePath, now });
+	const entry: { at: number; snapshot: PoolOverview } = { at: now, snapshot: undefined };
+	lastOverviewAttempt.set(cachePath, entry);
+	entry.snapshot = await fetchTuiQuotaOverview({ cachePath, now });
+	return entry.snapshot;
 }
 
 /** Format on the server so remote TUIs never need access to credentials. */

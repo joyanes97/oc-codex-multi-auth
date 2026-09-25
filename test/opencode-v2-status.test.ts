@@ -94,3 +94,12 @@ it("skips an empty resets screen instead of blanking the status line", async () 
 	now.mockRestore();
 	expect([...seen]).toEqual(["pool 40%"]);
 });
+
+it("keeps the fetched pool when writing its cache failed", async () => {
+	mocks.quotaStatus = { mode: ["overview"] };
+	mocks.overview.mockResolvedValue({ fetchedAt: Date.now(), accounts: [] });
+	mocks.cachedOverview.mockResolvedValue(undefined);
+	expect((await readV2Status({ width: 80 })).text).toBe("pool 40%");
+	expect((await readV2Status({ width: 80 })).text).toBe("pool 40%");
+	expect(mocks.overview).toHaveBeenCalledTimes(1);
+});
