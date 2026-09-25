@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file. Dates are I
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.24.0] - 2026-09-25
+
+### Added
+- OpenCode V2 (2.0.16+) is now supported, with the same account pool, Codex routing, account tools and quota status bar. See the README for setup. The installer's new `--v2` flag registers the plugin but will not touch an existing `opencode.jsonc` or V1 `plugin` entries. (#269, thanks @lubshad)
+- `limits` and `codex-limits` now show what each seat is worth next to the others (like `Plan: pro (20x)`) and one pool line weighted by seat size (like `Pool: 93% used of 81x across 11 accounts`). The same figures are in the JSON output. (#268, thanks @Nowaker)
+- The status line has a new `quotaStatus.layout: "total"` that shows just the pool percentage, and `recovery: "all"` that lists every upcoming capacity return in order, such as `+33% in 5d, +43% in 6d`. Returns that land in the same displayed countdown are added together. (#270, thanks @Nowaker)
+- `resetsMinUsedPercent` (0 to 100, default 100) sets how spent the pool must be before the resets screen appears. It lists only reset credits known to apply. (#270, thanks @Nowaker)
+
+### Changed
+- **Action needed:** the V1 entrypoint now needs OpenCode 1.18.29 or newer, because the plugin now exports an object instead of a bare function. (#269)
+- `recovery: true` now counts only readable resets that are still in the future, the same as `"all"`. It used to count past or unreadable ones too and over-report. (#270)
+- After an upgrade that adds new status-line options, restart OpenCode once. Later settings changes still reload live. (#270)
+
+### Fixed
+- `limits` JSON with no accounts configured now includes `pool: null` instead of leaving the field out. (#268)
+- A catalog that parses to a non-object (like `null`) now returns `null` instead of throwing. (#265)
+
+### Internal
+- Two tests that failed on Windows since 6.22.0 now pass; both were fixture bugs. (#265)
+
 ## [6.23.0] - 2026-09-23
 
 ### Added
