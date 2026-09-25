@@ -71,7 +71,16 @@ export function setupV2Tui(context: Plugin.Context) {
 			const element = createElement("text");
 			spread(element, {
 				get children() {
-					const providerID = props.sessionID ? context.data.session.get(props.sessionID)?.model?.providerID : undefined;
+					let providerID = props.sessionID ? context.data.session.get(props.sessionID)?.model?.providerID : undefined;
+					if (props.sessionID) {
+						const messages = context.data.session.message.list(props.sessionID) ?? [];
+						for (let index = messages.length - 1; index >= 0; index -= 1) {
+							const message = messages[index];
+							if (message?.type !== "assistant") continue;
+							providerID = message.model.providerID;
+							break;
+						}
+					}
 					return showFor() === "codex-models" && providerID && providerID !== "openai" ? "" : text();
 				},
 				get fg() { return context.theme.text.base; },

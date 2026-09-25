@@ -34,10 +34,12 @@ describe("V2 accounts UI", () => {
 		});
 		const alert = vi.fn();
 		const unregister = vi.fn();
+		const messages: Array<{ type: string; model?: { providerID: string } }> = [];
+		let configuredProvider = "anthropic";
 		const context = {
 			location: { directory: "/tmp/opencode/project" }, renderer: { width: 100 },
 			client: { rpc: () => ({ status }) }, theme: { text: { base: "white" } },
-			data: { session: { get: () => ({ model: { providerID: "anthropic" } }) } },
+			data: { session: { get: () => ({ model: { providerID: configuredProvider } }), message: { list: () => messages } } },
 			keymap: { layer: (factory: () => { commands: typeof commands }) => commands.push(...factory().commands) },
 			ui: { dialog: { alert }, slot: (claim: { append: string; render: (props: object) => { children: string } | null }) => {
 				slots.set(claim.append, claim);
@@ -54,6 +56,11 @@ describe("V2 accounts UI", () => {
 		await commands.find((command) => command.id === "codex.accounts")!.run();
 		expect(alert).toHaveBeenCalledWith(expect.objectContaining({ title: "Codex accounts", message: expect.stringContaining("opencode auth login") }));
 		// Hiding Codex quota for a different provider must not hide the account list.
+		expect(slots.get("prompt.footer.status")!.render({ sessionID: "test" })!.children).toBe("");
+		messages.push({ type: "assistant", model: { providerID: "openai" } }, { type: "user" });
+		expect(slots.get("prompt.footer.status")!.render({ sessionID: "test" })!.children).toBe("quota ready");
+		configuredProvider = "openai";
+		messages.push({ type: "assistant", model: { providerID: "anthropic" } });
 		expect(slots.get("prompt.footer.status")!.render({ sessionID: "test" })!.children).toBe("");
 		expect(sidebar.children).toContain("First");
 		status.mockRejectedValue(new Error("offline"));
