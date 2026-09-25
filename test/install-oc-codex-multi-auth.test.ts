@@ -47,6 +47,57 @@ describe("install-oc-codex-multi-auth script", () => {
 		expect(errorSpy).not.toHaveBeenCalled();
 	});
 
+	it("registers V2 using native plugin entries and preserves a local checkout and provider config", async () => {
+		tempHome = await createTempHome();
+		const { runInstaller } = await import("../scripts/install-oc-codex-multi-auth-core.js");
+		const configDir = join(tempHome, ".config", "opencode");
+		const configPath = join(configDir, "opencode.json");
+		const checkout = join(tempHome, "checkout");
+		await mkdir(checkout, { recursive: true });
+		await writeFile(join(checkout, "package.json"), JSON.stringify({ name: "oc-codex-multi-auth" }));
+		await mkdir(configDir, { recursive: true });
+		const providers = { openai: { models: { custom: { name: "Keep me" } } } };
+		await writeFile(configPath, JSON.stringify({ providers, plugins: [{ package: checkout, options: { enabled: true } }, "another-plugin"] }));
+		await runInstaller(["--v2"], { env: { HOME: tempHome, USERPROFILE: tempHome } });
+		const result = JSON.parse(await readFile(configPath, "utf8"));
+		expect(result.providers).toEqual(providers);
+		expect(result.plugin).toBeUndefined();
+		expect(result.plugins).toEqual([{ package: checkout, options: { enabled: true } }, "another-plugin"]);
+		expect(await readdir(configDir)).not.toContain("tui.json");
+		expect(await readdir(configDir)).not.toContain("cli.json");
+	});
+
+	it("refuses to remove an existing V1 registration during V2 install", async () => {
+		tempHome = await createTempHome();
+		const { runInstaller } = await import("../scripts/install-oc-codex-multi-auth-core.js");
+		const configDir = join(tempHome, ".config", "opencode");
+		const configPath = join(configDir, "opencode.json");
+		await mkdir(configDir, { recursive: true });
+		const original = JSON.stringify({ plugin: ["oc-codex-multi-auth"], provider: { openai: {} } });
+		await writeFile(configPath, original);
+		await expect(runInstaller(["--v2"], { env: { HOME: tempHome } })).rejects.toThrow("will not remove your V1 registration");
+		expect(await readFile(configPath, "utf8")).toBe(original);
+	});
+
+	it("refuses to create a second V2 config beside an existing JSONC file", async () => {
+		tempHome = await createTempHome();
+		const { runInstaller } = await import("../scripts/install-oc-codex-multi-auth-core.js");
+		const configDir = join(tempHome, ".config", "opencode");
+		await mkdir(configDir, { recursive: true });
+		const original = '{ "plugins": ["another-plugin"] }';
+		await writeFile(join(configDir, "opencode.jsonc"), original);
+		await expect(runInstaller(["--v2", "--dry-run"], { env: { HOME: tempHome } })).rejects.toThrow("edit its plugins list directly");
+		expect(await readdir(configDir)).toEqual(["opencode.jsonc"]);
+		expect(await readFile(join(configDir, "opencode.jsonc"), "utf8")).toBe(original);
+	});
+
+	it("does not write V2 config during a dry run", async () => {
+		tempHome = await createTempHome();
+		const { runInstaller } = await import("../scripts/install-oc-codex-multi-auth-core.js");
+		await runInstaller(["--v2", "--dry-run"], { env: { HOME: tempHome, USERPROFILE: tempHome } });
+		expect(await readdir(tempHome)).toEqual([]);
+	});
+
 	it("detects direct CLI execution after path normalization", async () => {
 		vi.resetModules();
 		const { isDirectRunPath } = await import("../scripts/install-oc-codex-multi-auth-core.js");

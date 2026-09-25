@@ -790,7 +790,7 @@ export function shouldRefreshToken(auth: Auth, skewMs = 0): boolean {
  */
 export async function refreshAndUpdateToken(
 	currentAuth: OAuthAuthDetails,
-	client: OpencodeClient,
+	client: OpencodeClient | undefined,
 	identity: Omit<PersistedRefreshIdentity, "refreshToken"> = {},
 ): Promise<OAuthAuthDetails> {
 	const refreshToken = currentAuth.refresh;
@@ -833,7 +833,7 @@ export async function refreshAndUpdateToken(
 	const currentScope = currentAuth.scope;
 	const nextScope = refreshResult.scope ?? currentScope;
 
-	await client.auth.set({
+	await client?.auth.set({
 		path: { id: "openai" },
 		body: {
 			type: "oauth",
@@ -842,7 +842,7 @@ export async function refreshAndUpdateToken(
 			expires: refreshResult.expires,
 			scope: nextScope,
 			multiAccount: true,
-		} as Parameters<typeof client.auth.set>[0]["body"],
+		} as Parameters<OpencodeClient["auth"]["set"]>[0]["body"],
 	});
 
 	currentAuth.access = refreshResult.access;

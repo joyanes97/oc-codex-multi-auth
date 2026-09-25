@@ -33,7 +33,7 @@ import { registerCleanup, unregisterCleanup } from "./lib/shutdown.js";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Plugin, PluginInput } from "@opencode-ai/plugin";
+import type { Plugin, PluginInput, Hooks } from "@opencode-ai/plugin";
 import type { Auth } from "@opencode-ai/sdk";
 import {
         type AuthorizationInputParseResult,
@@ -392,8 +392,20 @@ function resolveOpenAIBaseURL(): string | undefined {
  * ```
  */
  
-export const OpenAIOAuthPlugin: Plugin = async ({ client }: PluginInput) => {
-	initLogger(client);
+export const OpenAIOAuthPlugin: Plugin = async ({ client }: PluginInput) => createPluginRuntime({ client });
+
+/**
+ * Shared request/account runtime; V2 has no V1 client or host auth.json.
+ *
+ * Not exported: V1 hosts call every function this module exports as a plugin,
+ * so an exported factory would boot a second runtime beside the real one. The
+ * V2 entry receives it through `setup` instead.
+ */
+async function createPluginRuntime({ client, directory = process.cwd() }: {
+	client?: PluginInput["client"];
+	directory?: string;
+}): Promise<Hooks> {
+	initLogger(client ?? {});
 	let customBaseURLWarningShown = false;
 	let customBaseURLErrorShown = false;
 	let cachedAccountManager: AccountManager | null = null;
@@ -830,7 +842,7 @@ export const OpenAIOAuthPlugin: Plugin = async ({ client }: PluginInput) => {
                 options?: { title?: string; duration?: number },
         ): Promise<void> => {
                 try {
-                        await client.tui.showToast({
+                        await client?.tui.showToast({
                                 body: {
                                         message,
                                         variant,
@@ -2046,6 +2058,8 @@ export const OpenAIOAuthPlugin: Plugin = async ({ client }: PluginInput) => {
                 if (event.type === "server.instance.disposed") {
                         quotaMonitor.dispose();
 						disposeAccountsWatcher();
+						await cachedAccountManager?.flushPendingSave();
+						cachedAccountManager?.disposeShutdownHandler();
                         return;
                 }
                 // Handle TUI account selection events
@@ -2160,8 +2174,8 @@ export const OpenAIOAuthPlugin: Plugin = async ({ client }: PluginInput) => {
 
 	const startupPluginConfig = loadPluginConfig();
 	const startupPerProjectAccounts = getPerProjectAccounts(startupPluginConfig);
-	setStoragePath(startupPerProjectAccounts ? process.cwd() : null);
-	await backfillHostOpenAIAuthFromPool();
+	setStoragePath(startupPerProjectAccounts ? directory : null);
+	if (client) await backfillHostOpenAIAuthFromPool();
 	quotaMonitor.start();
 
         return {
@@ -2210,7 +2224,7 @@ export const OpenAIOAuthPlugin: Plugin = async ({ client }: PluginInput) => {
 				let perProjectAccounts = getPerProjectAccounts(pluginConfig);
 				let storageTransition: Promise<void> | undefined;
 				const activeFetches = new Set<Promise<void>>();
-				setStoragePath(perProjectAccounts ? process.cwd() : null);
+				setStoragePath(perProjectAccounts ? directory : null);
 				const authFallback = auth.type === "oauth" ? (auth as OAuthAuthDetails) : undefined;
 
 				// Prefer multi-account auth metadata when available, but still handle
@@ -2343,9 +2357,9 @@ export const OpenAIOAuthPlugin: Plugin = async ({ client }: PluginInput) => {
 					}
 				}
 
-				const recoveryHook = sessionRecoveryEnabled
+				const recoveryHook = sessionRecoveryEnabled && client
 					? createSessionRecoveryHook(
-							{ client, directory: process.cwd() },
+							{ client, directory },
 							{ sessionRecovery: true, autoResume: autoResumeEnabled }
 						)
 					: null;
@@ -2408,7 +2422,7 @@ export const OpenAIOAuthPlugin: Plugin = async ({ client }: PluginInput) => {
 									await Promise.all(activeFetches);
 									// Drain the old pool's pending write before changing the global path.
 									await cachedAccountManager?.flushPendingSave();
-									setStoragePath(currentPerProjectAccounts ? process.cwd() : null);
+									setStoragePath(currentPerProjectAccounts ? directory : null);
 									invalidateAccountManagerCache();
 									perProjectAccounts = currentPerProjectAccounts;
 								})().finally(() => { storageTransition = undefined; });
@@ -4141,7 +4155,7 @@ export const OpenAIOAuthPlugin: Plugin = async ({ client }: PluginInput) => {
 							const authPluginConfig = loadPluginConfig();
 							applyUiRuntimeFromConfig(authPluginConfig);
 							const authPerProjectAccounts = getPerProjectAccounts(authPluginConfig);
-							setStoragePath(authPerProjectAccounts ? process.cwd() : null);
+							setStoragePath(authPerProjectAccounts ? directory : null);
 
 							const accounts: TokenSuccessWithAccount[] = [];
 							// Programmatic input, not a menu choice: a headless caller or
@@ -5056,7 +5070,7 @@ export const OpenAIOAuthPlugin: Plugin = async ({ client }: PluginInput) => {
 							const manualBrowserPluginConfig = loadPluginConfig();
 							applyUiRuntimeFromConfig(manualBrowserPluginConfig);
 							const manualBrowserPerProjectAccounts = getPerProjectAccounts(manualBrowserPluginConfig);
-							setStoragePath(manualBrowserPerProjectAccounts ? process.cwd() : null);
+							setStoragePath(manualBrowserPerProjectAccounts ? directory : null);
 
 							const session = await startLoopbackFlow({ openBrowser: false });
 							if (session.type === "unavailable") {
@@ -5107,7 +5121,7 @@ export const OpenAIOAuthPlugin: Plugin = async ({ client }: PluginInput) => {
 							const devicePluginConfig = loadPluginConfig();
 							applyUiRuntimeFromConfig(devicePluginConfig);
 							const devicePerProjectAccounts = getPerProjectAccounts(devicePluginConfig);
-							setStoragePath(devicePerProjectAccounts ? process.cwd() : null);
+							setStoragePath(devicePerProjectAccounts ? directory : null);
 
 							const started = await createDeviceCodeSession();
 							if (started.type === "failed") {
@@ -5149,7 +5163,7 @@ export const OpenAIOAuthPlugin: Plugin = async ({ client }: PluginInput) => {
 							const manualPluginConfig = loadPluginConfig();
 							applyUiRuntimeFromConfig(manualPluginConfig);
 							const manualPerProjectAccounts = getPerProjectAccounts(manualPluginConfig);
-							setStoragePath(manualPerProjectAccounts ? process.cwd() : null);
+							setStoragePath(manualPerProjectAccounts ? directory : null);
 
 							const { pkce, state, url } = await createAuthorizationFlow();
 							return buildManualOAuthFlow(pkce, url, state, false);
@@ -5163,4 +5177,12 @@ export const OpenAIOAuthPlugin: Plugin = async ({ client }: PluginInput) => {
 
 export const OpenAIAuthPlugin = OpenAIOAuthPlugin;
 
-export default OpenAIOAuthPlugin;
+export default {
+	id: "oc-codex-multi-auth",
+	server: OpenAIOAuthPlugin,
+	/** V2 loads the same package through setup instead of the V1 server hook. */
+	async setup(context: import("@opencode/plugin").Plugin.Context) {
+		const { setupV2 } = await import("./lib/opencode-v2.js");
+		return setupV2(context, createPluginRuntime);
+	},
+};

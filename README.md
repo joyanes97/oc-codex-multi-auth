@@ -9,6 +9,8 @@
 
 Use it when you want OpenCode to run Codex-style coding workflows from your own ChatGPT subscription while keeping accounts visible, switchable, health-checked, and recoverable from the terminal.
 
+**OpenCode V2 is supported (2.0.16+).** The V2 adapter uses the existing OAuth account pool and Codex routing pipeline; the V1 entrypoint remains available for OpenCode 1.18.29+. See [OpenCode V2 installation](#opencode-v2) for setup and login instructions.
+
 <img width="1227" height="702" alt="oc-codex-multi-auth OpenCode plugin dashboard for ChatGPT OAuth, Codex routing, and multi-account health" src="https://github.com/user-attachments/assets/b796eb2f-282e-468a-ba6a-acadf09d731b" />
 
 
@@ -73,6 +75,57 @@ The plugin does not replace OpenCode. OpenCode remains the host; this package in
 ---
 
 ## Installation
+
+### OpenCode V2
+
+The V2 compatibility adapter targets OpenCode **2.0.16 or newer** and reuses the
+existing OAuth account pool, refresh, rotation, retry, and Codex request pipeline.
+Register the package in `opencode.json(c)`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": ["oc-codex-multi-auth"]
+}
+```
+
+For a working checkout, use its absolute directory path in `plugins`, then run
+`npm install` and `npm run build` in that checkout. The V2 terminal automatically
+loads the package's quota UI through its `./tui` export.
+
+The installer also accepts `--v2` to register the plugin without rewriting the
+model catalog. It refuses to modify an existing `opencode.jsonc` or convert a
+config with V1 `plugin` entries: edit the JSONC `plugins` list directly, or keep
+separate V1 and V2 configurations so the V1 registration is not lost. Restart
+the background service after installing or rebuilding:
+
+```bash
+opencode service restart
+```
+
+Run `opencode auth login` from your project directory and select **OpenAI** →
+**Codex OAuth (Add account — ChatGPT Plus/Pro)**. Repeat for each account, using
+a private browser window or switching browser accounts to select a different login.
+The built-in **ChatGPT Pro/Plus (browser)** method does not run the plugin's add-account flow.
+The plugin's **Device Code**, **Open URL Manually**, and **Manual URL Paste**
+methods are also available through login or `/connect`. Each adds to the pool;
+logging into the same account updates its existing entry. Pools are per-project
+by default, so log in from the directory where you use OpenCode. Existing
+plugin accounts remain usable; V2's own credentials are managed through its
+integration API. Use the plugin's `codex-list` and `codex-switch` tools to manage
+its pool. V2 normalizes tool names, so these appear as `codex_list`, `codex_switch`,
+and so on. The **Codex accounts** sidebar section lists the pool and marks its
+active account. Use `/codex-accounts` or **Codex accounts** in the command palette
+to view the list even when the sidebar is hidden. The quota details command is
+also available in the command palette.
+
+Existing supported V1 provider/model config can remain in place. The adapter
+uses HTTP Responses through the existing plugin transport. V1's interactive
+multi-account login menu and session-repair client calls are replaced by the
+V2 connection UI and host session handling. The V1 entrypoint remains available
+for OpenCode **1.18.29+**.
+
+### OpenCode V1
 
 <details open>
 <summary><b>For Humans</b></summary>

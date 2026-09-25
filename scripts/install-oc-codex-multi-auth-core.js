@@ -113,6 +113,7 @@ function printHelp() {
 		"  - Clears OpenCode plugin cache\n\n" +
 		"Options:\n" +
 		"  --plugin-only      Register plugins without changing provider.openai\n" +
+		"  --v2               Register for OpenCode V2 (includes automatic quota UI loading)\n" +
 		"  --modern           Force compact modern config (10 base OAuth models + --variant presets)\n" +
 		"  --full             Install compact base models plus 53 explicit selector entries\n" +
 		"  --legacy           Force explicit legacy config (53 preset model entries)\n" +
@@ -150,12 +151,14 @@ function resolveHomeDirectory(env = process.env) {
 	return env.HOME || env.USERPROFILE || homedir();
 }
 
+/** Resolve both JSON and JSONC config locations before changing V2 registration. */
 function buildPaths(homeDir) {
 	const configDir = join(homeDir, ".config", "opencode");
 	const cacheDir = join(homeDir, ".cache", "opencode");
 	return {
 		configDir,
 		configPath: join(configDir, "opencode.json"),
+		jsoncConfigPath: join(configDir, "opencode.jsonc"),
 		tuiConfigPath: join(configDir, "tui.json"),
 		cacheDir,
 		cacheNodeModulesPaths: getManagedPackageNames().map((name) => join(cacheDir, "node_modules", name)),
@@ -171,6 +174,7 @@ function buildPaths(homeDir) {
 	};
 }
 
+/** Keep V2 plugin-only installation separate from V1 model catalog modes. */
 function parseCliArgs(argv = process.argv.slice(2)) {
 	const args = new Set(argv);
 	if (args.has("--help") || args.has("-h")) {
@@ -193,12 +197,16 @@ function parseCliArgs(argv = process.argv.slice(2)) {
 		throw new Error("--plugin-only cannot be combined with --modern, --full, or --legacy.");
 	}
 	const pluginOnly = explicitPluginOnly || requestedModes === 0;
+	if (args.has("--v2") && !pluginOnly) {
+		throw new Error("--v2 registers the plugin only; omit --modern, --full, and --legacy.");
+	}
 
 	return {
 		wantsHelp: false,
 		dryRun: args.has("--dry-run"),
 		skipCacheClear: args.has("--no-cache-clear"),
 		pluginOnly,
+		v2: args.has("--v2"),
 		configMode: requestedFull ? "full" : requestedLegacy ? "legacy" : "modern",
 	};
 }
@@ -221,8 +229,10 @@ const LOCAL_CHECKOUT_ENTRY = "local-checkout";
 const UNRELATED_ENTRY = "unrelated";
 const DECLARED_NAME_LOOKUP_DEPTH = 3;
 
+/** Extract a package/path from V1 tuples or native V2 plugin objects. */
 function pluginEntrySpecifier(entry) {
 	if (typeof entry === "string") return entry;
+	if (isPlainObject(entry) && typeof entry.package === "string") return entry.package;
 	// `[specifier, options]` configures a plugin without changing where it loads from.
 	if (Array.isArray(entry) && typeof entry[0] === "string") return entry[0];
 	return null;
@@ -1818,6 +1828,7 @@ async function clearCache(paths, dryRun, skipCacheClear) {
 	await removePluginFromCachePackage(paths, dryRun);
 }
 
+/** Route V2 installs without rewriting V1 entries or parallel JSONC config. */
 export async function runInstaller(argv = process.argv.slice(2), options = {}) {
 	const split = splitCommandArgv(argv);
 	if (split.kind === "standalone") {
@@ -1850,6 +1861,27 @@ export async function runInstaller(argv = process.argv.slice(2), options = {}) {
 	}
 
 	const { configMode, dryRun, skipCacheClear, pluginOnly } = parsed;
+	if (parsed.v2) {
+		if (existsSync(paths.jsoncConfigPath)) {
+			throw new Error(`OpenCode config exists at ${paths.jsoncConfigPath}; edit its plugins list directly instead of writing a second config file.`);
+		}
+		const existing = existsSync(paths.configPath) ? await readJson(paths.configPath) : {};
+		if (!isPlainObject(existing)) throw new Error("OpenCode config root must be an object");
+		if (Array.isArray(existing.plugin) && existing.plugin.length > 0) {
+			throw new Error("OpenCode V1 plugin entries are present. Use a separate V2 config or migrate them manually; --v2 will not remove your V1 registration.");
+		}
+		const next = { ...existing, plugins: normalizePluginList(existing.plugins, log, {
+			baseDirectory: paths.configDir, cacheDirectory: paths.cacheDir,
+		}) };
+		next.$schema ??= "https://opencode.ai/config.json";
+		if (dryRun) log(`[dry-run] Would register V2 plugin in ${paths.configPath}`);
+		else if (formatJson(existing) !== formatJson(next)) {
+			if (existsSync(paths.configPath)) await backupConfig(paths.configPath, false);
+			await writeFileAtomic(paths.configPath, formatJson(next));
+		}
+		log(dryRun ? "V2 registration dry run complete." : "V2 plugin registered. Restart the OpenCode service to load it.");
+		return { exitCode: 0, action: "install", dryRun: Boolean(dryRun), configMode: "v2" };
+	}
 	const effectiveConfigMode = pluginOnly ? "plugin-only" : configMode;
 	const requiredTemplatePaths = pluginOnly
 		? []
