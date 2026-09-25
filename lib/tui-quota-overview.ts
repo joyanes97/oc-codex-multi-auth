@@ -93,6 +93,7 @@ export function toOverviewAccount(params: {
 		// stated a count this build could not read.
 		resetCredits:
 			resetCredits?.applicableNow ?? resetCredits?.available ?? undefined,
+		resetCreditsApplicable: resetCredits?.applicableNow ?? null,
 		limits,
 	};
 }
@@ -254,8 +255,11 @@ export function toQuotaOverviewAccounts(
 		label: account.label,
 		planType: account.planType,
 		resetCredits: account.resetCredits,
+		resetCreditsApplicable: account.resetCreditsApplicable,
 		windows: account.limits.map((limit) => ({
 			leftPercent: limit.leftPercent ?? undefined,
+			exactLeftPercent: typeof limit.usedPercent === "number" && Number.isFinite(limit.usedPercent)
+				? Math.max(0, Math.min(100, 100 - limit.usedPercent)) : undefined,
 			resetAtMs: limit.resetAtMs,
 		})),
 	}));

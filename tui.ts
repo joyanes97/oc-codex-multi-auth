@@ -56,6 +56,8 @@ import {
 	type TuiQuotaSnapshot,
 } from "./lib/tui-quota-cache.js";
 import { loadAccounts } from "./lib/storage.js";
+import { protectQuotaStatusSlot } from "./lib/tui-status-slot.js";
+export { protectQuotaStatusSlot } from "./lib/tui-status-slot.js";
 
 const CACHE_KEY = "oc-codex-multi-auth:tui-status:v2";
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -434,6 +436,7 @@ export function samePromptStatusOptions(
 		leftStatus.resetTimes === rightStatus.resetTimes &&
 		leftStatus.resetCredits === rightStatus.resetCredits &&
 		leftStatus.recovery === rightStatus.recovery &&
+		leftStatus.resetsMinUsedPercent === rightStatus.resetsMinUsedPercent &&
 		leftStatus.rows === rightStatus.rows &&
 		leftStatus.showFor === rightStatus.showFor
 	);
@@ -646,6 +649,7 @@ function createOverviewQuotaController(
 			return render({
 				accounts: current.accounts,
 				options: toQuotaOverviewOptions(options, Date.now()),
+				resetsMinUsedPercent: options.quotaStatus.resetsMinUsedPercent,
 				width: api.renderer.width,
 				availableChars: layout.availableChars,
 				maxRows: layout.maxRows,
@@ -900,6 +904,7 @@ function createPromptStatus(
 	let rotationInterval: ReturnType<typeof setInterval> | undefined;
 
 	const node = solid.createElement("text");
+	let restoreSlotShrink: (() => void) | undefined;
 
 	const restartRotation = (screens: readonly QuotaStatusScreen[]): void => {
 		if (rotationInterval) clearInterval(rotationInterval);
@@ -912,6 +917,13 @@ function createPromptStatus(
 	restartRotation(controllerScreens);
 
 	const remeasure = (): void => {
+		const status = options().quotaStatus;
+		if (status.layout === "total" || status.recovery === "all") {
+			restoreSlotShrink ??= protectQuotaStatusSlot(node);
+		} else if (restoreSlotShrink) {
+			restoreSlotShrink();
+			restoreSlotShrink = undefined;
+		}
 		const next = measureStatusSlot(node);
 		if (next.availableChars === metrics().availableChars) return;
 		setMetrics(next);
@@ -943,6 +955,7 @@ function createPromptStatus(
 	solid.onCleanup(() => {
 		clearInterval(configInterval);
 		clearInterval(measureInterval);
+		restoreSlotShrink?.();
 		if (rotationInterval) clearInterval(rotationInterval);
 		for (const controller of controllers) controller.dispose();
 	});
