@@ -219,7 +219,9 @@ describe("sticky selection (#183, drain-first)", () => {
 
   it("recovers the current account once its rate limit expires", () => {
     const first = manager.getCurrentOrNextForFamilySticky(FAMILY);
-    manager.markRateLimited(first!, 1, FAMILY); // expires ~immediately
+    // Long enough not to lapse mid-test: a 1ms limit expired under full-suite
+    // load before the next call, leaving the selection on 0.
+    manager.markRateLimited(first!, 60_000, FAMILY);
     // Move off 0.
     const moved = manager.getCurrentOrNextForFamilySticky(FAMILY);
     expect(moved?.index).toBe(1);
