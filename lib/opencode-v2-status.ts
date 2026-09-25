@@ -69,6 +69,7 @@ export async function readV2Status({ width }: { width: number }) {
 		const format = screen === "resets" ? formatQuotaResetsStatusLines : formatQuotaOverviewStatusLines;
 		return format({
 			accounts: toQuotaOverviewAccounts(overview), width, availableChars: width, maxRows: status.rows,
+			resetsMinUsedPercent: status.resetsMinUsedPercent,
 			options: { ...status, names: status.accountNames, mode: quotaDisplay, maskEmail },
 		}).join("\n");
 	};

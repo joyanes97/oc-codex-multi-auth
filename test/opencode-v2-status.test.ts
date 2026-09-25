@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
 	overview: vi.fn(),
 	cachedOverview: vi.fn(),
 	promptStatus: vi.fn(),
+	resetsParams: vi.fn(),
 	quotaStatus: undefined as Record<string, unknown> | undefined,
 }));
 
@@ -32,7 +33,7 @@ vi.mock("../lib/tui-quota-overview.js", () => ({
 vi.mock("../lib/tui-status.js", async (original) => ({
 	...await original<typeof import("../lib/tui-status.js")>(),
 	formatPromptStatusText: (options: unknown) => { mocks.promptStatus(options); return "quota"; },
-	formatQuotaResetsStatusLines: () => [],
+	formatQuotaResetsStatusLines: (params: unknown) => { mocks.resetsParams(params); return []; },
 	formatQuotaOverviewStatusLines: () => ["pool 40%"],
 }));
 import { readV2Status, resetV2StatusThrottle } from "../lib/opencode-v2-status.js";
@@ -102,4 +103,11 @@ it("keeps the fetched pool when writing its cache failed", async () => {
 	expect((await readV2Status({ width: 80 })).text).toBe("pool 40%");
 	expect((await readV2Status({ width: 80 })).text).toBe("pool 40%");
 	expect(mocks.overview).toHaveBeenCalledTimes(1);
+});
+
+it("passes resetsMinUsedPercent to the V2 resets screen", async () => {
+	mocks.quotaStatus = { mode: ["resets"], resetsMinUsedPercent: 80 };
+	mocks.overview.mockResolvedValue({ fetchedAt: Date.now(), accounts: [] });
+	await readV2Status({ width: 80 });
+	expect(mocks.resetsParams).toHaveBeenLastCalledWith(expect.objectContaining({ resetsMinUsedPercent: 80 }));
 });
